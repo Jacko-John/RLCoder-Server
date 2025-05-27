@@ -37,7 +37,7 @@ def set_random_seed(seed=123):
 
 set_random_seed()
 
-
+# 核心代码，输入数据集，检索内容
 # Retrieves code blocks based on different inference types.
 def retrieve_codeblocks(args, examples, bm25, retriever, dataset_name, is_training=False, inference_type=None):
     """
@@ -139,8 +139,8 @@ def run(args):
     }
 
 
-    global generator
-    generator = Generator(args)
+    # global generator
+    # generator = Generator(args)
     retriever = Retriever(args)
 
 
@@ -171,302 +171,16 @@ def run(args):
             print("Evaluating on {} dataset".format(name))
             
             temp_examples = copy.deepcopy(examples)
+            
+            temp_examples = temp_examples[:10]
 
             
             temp_generations = []
                 
             for _ in range(args.forward_generation_times):
                 _, retrieved_codeblocks = retrieve_codeblocks(args, temp_examples, bm25, retriever, name)
-                # for i in range(len(retrieved_codeblocks)):
-                #     for j in range(len(retrieved_codeblocks[i])):
-                #         print('#', retrieved_codeblocks[i][j].file_path)
-                #         print(retrieved_codeblocks[i][j].code_content)
-                losses = generator.evaluate(examples, retrieved_codeblocks)
-
-
-                results = {"em": "-","es": "-","id_em": "-","id_f1": "-"}
-                if args.enable_generation:
-                    generations = generator.generate(temp_examples, retrieved_codeblocks, args.generator_max_generation_length)
-
-                    if not temp_generations:
-                        temp_generations = generations
-                    else:
-                        temp_generations = [temp_generations[i] + generations[i] for i in range(len(generations))]
-                    for i in range(len(temp_examples)):
-                        temp_examples[i].left_context = examples[i].left_context + temp_generations[i]
-                        
-            if args.enable_generation:
-
-                if not os.path.exists(f"{args.output_dir}/{name}"):
-                    os.makedirs(f"{args.output_dir}/{name}", exist_ok=True)
-                with open(f"{args.output_dir}/{name}/prediction.jsonl", "w", encoding="utf-8") as f_pred:
-                    for example, temp_generation in zip(examples, temp_generations):
-                        f_pred.write(json.dumps({"task_id": example.task_id, "pred": temp_generation}) + "\n")
-
-
-                if name == "cceval_python":
-                    results = compute_metric_stmt(f"{args.output_dir}/{name}", "data/cceval/python/test.jsonl", language="python", ts_lib="utils/build/python-lang-parser.so")
-                elif name == "cceval_java":
-                    results = compute_metric_stmt(f"{args.output_dir}/{name}", "data/cceval/java/test.jsonl", language="java", ts_lib="utils/build/java-lang-parser.so")
-                elif name == "github_eval":
-                    targets, temp_generations = ["".join(x.target_code.split()) for x in examples], ["".join(x.split()) for x in temp_generations]
-                    results["em"] = round(sum([1 if x[:min(len(y),len(x))] == y[:min(len(y),len(x))] else 0 for x,y in zip(temp_generations,targets)])/len(temp_generations)*100,4)
-                elif name == "codereval_python":
-                    results = eval_codereval(f"{args.output_dir}/{name}", 'data/codereval/python/CEPythonRaw.jsonl', language='python', do_codereval=args.do_codereval)
-                elif name == "codereval_java":
-                    results = eval_codereval(f"{args.output_dir}/{name}", 'data/codereval/java/CEJavaRaw.jsonl', language='java', do_codereval=args.do_codereval)
-                elif name == "repoeval_line":
-                    results = compute_metric_stmt(f"{args.output_dir}/{name}", "data/repoeval/line_level/test.jsonl", language="python", ts_lib="utils/build/python-lang-parser.so")
-                elif name == "repoeval_api":
-                    results = compute_metric_stmt(f"{args.output_dir}/{name}", "data/repoeval/api_level/test.jsonl", language="python", ts_lib="utils/build/python-lang-parser.so")
-                # elif name == "repoeval_func":
-                #     results = compute_metric_stmt(f"{args.output_dir}/{name}", "data/repoeval/func_level/test.jsonl", language="python", ts_lib="utils/build/python-lang-parser.so")
-            
-
-            if 'codereval' in name:
-                codereval_table.add_row(['raw', name, len(examples), f"{np.mean(losses):.4f}", f"{np.exp(np.mean(losses)):.4f}", results["count"], results["all"], results["self"], results["slib"], results["plib"], results["class"], results["file"], results["project"], round(time.time() - start_time, 1)])
-            else:
-                table.add_row(['raw', name, len(examples), f"{np.mean(losses):.4f}", f"{np.exp(np.mean(losses)):.4f}", results["em"], results["es"], results["id_em"], results["id_f1"], round(time.time() - start_time, 1)])
-
-            print(table)
-            print(codereval_table)
-        
-    else:
-        print("data_per_epoch:{}, batch_size:{}, sample_number:{}, epoch:{}, inner_epoch:{}, lr:{}".format(args.data_per_epoch, args.batch_size,args.sample_number,args.epoch,args.inner_epoch,args.lr))
-        optimizer = AdamW(retriever.model.parameters(), lr=args.lr, eps=1e-8)
-        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps = args.data_per_epoch//args.batch_size * args.epoch * args.inner_epoch * 0.2, num_training_steps = args.data_per_epoch//args.batch_size * args.epoch * args.inner_epoch)
-    
-        evaluate_table = {}
-        for name, examples in all_eval_examples.items():
-            evaluate_table[name] = PrettyTable()
-            if 'codereval' in name:
-                evaluate_table[name].field_names = ["Epoch", "Method", "Dataset", "Total Samples", "Loss", "PPL", "count", "all", "self", "slib", "plib", "class", "file", "project", "Time (sec)"]
-            else:
-                evaluate_table[name].field_names = ["Epoch", "Method", "Dataset", "Total Samples", "Loss", "PPL", "EM", "ES", "ID_EM", "ID_F1", "Time (sec)"]
-
-        training_table = PrettyTable()
-        training_table.field_names = ["Epoch", "Dataset", "Total Samples", "Rewards", "Training Loss", "Time (sec)"]
-
-
-        retriever.model.eval()
-        for name, examples in all_eval_examples.items():
-            # examples = examples[:10]
-            
-            start_time = time.time()
-            temp_examples = copy.deepcopy(examples)
-            temp_generations = []
-
-                
-            for _ in range(args.forward_generation_times):
-                _, retrieved_codeblocks = retrieve_codeblocks(args, temp_examples, bm25, retriever, name) 
-                losses = generator.evaluate(examples, retrieved_codeblocks)
-
-
-                results = {"em": "-","es": "-","id_em": "-","id_f1": "-"}
-                if args.enable_generation:
-                    generations = generator.generate(temp_examples, retrieved_codeblocks, args.generator_max_generation_length)
-
-                    if not temp_generations:
-                        temp_generations = generations
-                    else:
-                        temp_generations = [temp_generations[i] + generations[i] for i in range(len(generations))]
-                    for i in range(len(temp_examples)):
-                        temp_examples[i].left_context = examples[i].left_context + temp_generations[i]
-                        
-            if args.enable_generation:
-
-                if os.path.exists(f"{args.output_dir}/result_init/{name}") is False:
-                    os.makedirs(f"{args.output_dir}/result_init/{name}", exist_ok=True)
-                with open(f"{args.output_dir}/result_init/{name}/prediction.jsonl", "w", encoding="utf-8") as f_pred:
-                    for example, temp_generation in zip(examples, temp_generations):
-                        f_pred.write(json.dumps({"task_id": example.task_id, "pred": temp_generation}) + "\n")
-
-                if name == "cceval_python":
-                    results = compute_metric_stmt(f"{args.output_dir}/result_init/{name}", "data/cceval/python/test.jsonl", language="python", ts_lib="utils/build/python-lang-parser.so")
-                elif name == "cceval_java":
-                    results = compute_metric_stmt(f"{args.output_dir}/result_init/{name}", "data/cceval/java/test.jsonl", language="java", ts_lib="utils/build/java-lang-parser.so")
-                elif name == "github_eval":
-                    targets, generations = ["".join(x.target_code.split()) for x in examples], ["".join(x.split()) for x in generations]
-                    results["em"] = round(sum([1 if x[:min(len(y),len(x))] == y[:min(len(y),len(x))] else 0 for x,y in zip(generations, targets)])/len(generations)*100,4)
-                elif name == "codereval_python":
-                    results = eval_codereval(f"{args.output_dir}/result_init/{name}", 'data/codereval/python/CEPythonRaw.jsonl', language='python', do_codereval=args.do_codereval)
-                elif name == "codereval_java":
-                    results = eval_codereval(f"{args.output_dir}/result_init/{name}", 'data/codereval/java/CEJavaRaw.jsonl', language='java', do_codereval=args.do_codereval)
-                elif name == "repoeval_line":
-                    results = compute_metric_stmt(f"{args.output_dir}/result_init/{name}", "data/repoeval/line_level/test.jsonl", language="python", ts_lib="utils/build/python-lang-parser.so")
-                elif name == "repoeval_api":
-                    results = compute_metric_stmt(f"{args.output_dir}/result_init/{name}", "data/repoeval/api_level/test.jsonl", language="python", ts_lib="utils/build/python-lang-parser.so")
-                
-
-            if 'codereval' in name:
-                evaluate_table[name].add_row(["init", 'raw', name, len(examples), f"{np.mean(losses):.4f}", f"{np.exp(np.mean(losses)):.4f}", results["count"], results["all"], results["self"], results["slib"], results["plib"], results["class"], results["file"], results["project"], round(time.time() - start_time, 1)])
-            else:
-                evaluate_table[name].add_row(["init", 'raw', name, len(examples), f"{np.mean(losses):.4f}", f"{np.exp(np.mean(losses)):.4f}", results["em"], results["es"], results["id_em"], results["id_f1"], round(time.time() - start_time, 1)])
-
-            print(evaluate_table[name])
-
-
-        for epoch in range(args.epoch):
-            print("=" * 40 + "Epoch:{}".format(epoch) + "=" * 40)
-            retriever.model.eval()
-            start_time = time.time()
-            results = {}
-            results["Epoch"] = epoch
-
-
-            training_examples = construct_dataset(training_raw_data, 100 if args.debug else args.data_per_epoch)
-            # training_examples = construct_dataset(training_raw_data, 100)
-            queries, retrieved_codeblocks = retrieve_codeblocks(args, training_examples, bm25, retriever, "github_training_{}".format(epoch), True)
-            training_examples_dup = [x for x in training_examples for _ in range(args.sample_number)]
-            training_codeblocks_dup = [[x] for y in retrieved_codeblocks for x in y]
-            assert len(training_examples_dup) == len(training_codeblocks_dup)
-
-
-            losses = generator.evaluate(training_examples_dup, training_codeblocks_dup)
-            labels = torch.tensor([x for x in losses]).view(-1, args.sample_number).argmin(-1)
-            results["Total Samples"] = len(queries)
-            results["Rewards"] = labels.float().mean().item()
-
-            retriever.model.train()
-            total_loss = 0
-            dataset = CustomDataset(args.retriever_query_context_length, args.retriever_candidate_context_length, retriever.tokenizer, queries, retrieved_codeblocks, labels.tolist())
-            dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-
-            for inner_epoch in range(args.inner_epoch):
-                for batch in dataloader:
-                    source_ids, doc_ids, labels = [x.cuda() for x in batch]
-                    queries_embeddings = retriever(source_ids)
-                    doc_texts_embeddings = retriever(doc_ids.view(-1, doc_ids.shape[-1])).view(source_ids.shape[0], args.sample_number, -1)
-                    logits = torch.einsum("ab,acb->ac", queries_embeddings, doc_texts_embeddings)*20
-                    loss = torch.nn.CrossEntropyLoss()(logits, labels)
-                    loss.backward()
-
-                    torch.nn.utils.clip_grad_norm_(retriever.model.parameters(), 1.0)
-                    optimizer.step()
-                    optimizer.zero_grad()
-                    scheduler.step()
-
-                    total_loss += loss.item()
-
-                if args.enable_sft:
-                    retriever.model.eval()
-                    for name, examples in all_eval_examples.items():
-                        # examples = examples[:10]
-                        
-                        start_time = time.time()
-                        temp_examples = copy.deepcopy(examples)
-                        temp_generations = []
-
-                            
-                        for _ in range(args.forward_generation_times):
-                            _, retrieved_codeblocks = retrieve_codeblocks(args, temp_examples, bm25, retriever, name) 
-                            losses = generator.evaluate(examples, retrieved_codeblocks)
-
-                            results = {"em": "-","es": "-","id_em": "-","id_f1": "-"}
-                            if args.enable_generation:
-                                generations = generator.generate(temp_examples, retrieved_codeblocks, args.generator_max_generation_length)
-
-                                if not temp_generations:
-                                    temp_generations = generations
-                                else:
-                                    temp_generations = [temp_generations[i] + generations[i] for i in range(len(generations))]
-                                for i in range(len(temp_examples)):
-                                    temp_examples[i].left_context = examples[i].left_context + temp_generations[i]
-                                    
-                        if args.enable_generation:
-                            if os.path.exists(f"{args.output_dir}/result_{inner_epoch}/{name}") is False:
-                                os.makedirs(f"{args.output_dir}/result_{inner_epoch}/{name}", exist_ok=True)
-                            with open(f"{args.output_dir}/result_{inner_epoch}/{name}/prediction.jsonl", "w", encoding="utf-8") as f_pred:
-                                for example, generation in zip(examples, temp_generations):
-                                    f_pred.write(json.dumps({"task_id": example.task_id, "pred": generation}) + "\n")
-
-                            if name == "cceval_python":
-                                results = compute_metric_stmt(f"{args.output_dir}/result_{inner_epoch}/{name}", "data/cceval/python/test.jsonl", language="python", ts_lib="utils/build/python-lang-parser.so")
-                            elif name == "cceval_java":
-                                results = compute_metric_stmt(f"{args.output_dir}/result_{inner_epoch}/{name}", "data/cceval/java/test.jsonl", language="java", ts_lib="utils/build/java-lang-parser.so")
-                            elif name == "github_eval":
-                                targets, generations = ["".join(x.target_code.split()) for x in examples], ["".join(x.split()) for x in generations]
-                                results["em"] = round(sum([1 if x[:min(len(y),len(x))] == y[:min(len(y),len(x))] else 0 for x,y in zip(generations,targets)])/len(generations)*100,4)
-                            elif name == "codereval_python":
-                                results = eval_codereval(f"{args.output_dir}/result_{inner_epoch}/{name}", 'data/codereval/python/CEPythonRaw.jsonl', language='python', do_codereval=args.do_codereval)
-                            elif name == "codereval_java":
-                                results = eval_codereval(f"{args.output_dir}/result_{inner_epoch}/{name}", 'data/codereval/java/CEJavaRaw.jsonl', language='java', do_codereval=args.do_codereval)
-                            elif name == "repoeval_line":
-                                results = compute_metric_stmt(f"{args.output_dir}/result_{inner_epoch}/{name}", "data/repoeval/line_level/test.jsonl", language="python", ts_lib="utils/build/python-lang-parser.so")
-                            elif name == "repoeval_api":
-                                results = compute_metric_stmt(f"{args.output_dir}/result_{inner_epoch}/{name}", "data/repoeval/api_level/test.jsonl", language="python", ts_lib="utils/build/python-lang-parser.so")
-
-                        if 'codereval' in name:
-                            evaluate_table[name].add_row([inner_epoch, 'raw', name, len(examples), f"{np.mean(losses):.4f}", f"{np.exp(np.mean(losses)):.4f}", results["count"], results["all"], results["self"], results["slib"], results["plib"], results["class"], results["file"], results["project"], round(time.time() - start_time, 1)])
-                        else:
-                            evaluate_table[name].add_row([inner_epoch, 'raw', name, len(examples), f"{np.mean(losses):.4f}", f"{np.exp(np.mean(losses)):.4f}", results["em"], results["es"], results["id_em"], results["id_f1"], round(time.time() - start_time, 1)])
-
-                        print(evaluate_table[name])
-                    
-                    retriever.model.module.save_pretrained(f"{args.output_dir}/retriever_cpkt/result_{inner_epoch}")
-                    retriever.tokenizer.save_pretrained(f"{args.output_dir}/retriever_cpkt/result_{inner_epoch}")
-
-            results["Training Loss"] = total_loss/len(dataloader)/args.inner_epoch
-            results["Time (sec)"] = round(time.time() - start_time, 1)
-            training_table.add_row([results["Epoch"], "github_training_{}".format(epoch), results["Total Samples"], results["Rewards"], results["Training Loss"], results["Time (sec)"]])
-            print(training_table)
-
-            
-            retriever.model.eval()
-            for name, examples in all_eval_examples.items():
-                # examples = examples[:10]
-                
-                start_time = time.time()
-                temp_examples = copy.deepcopy(examples)
-                temp_generations = []
-                    
-                for _ in range(args.forward_generation_times):
-                    _, retrieved_codeblocks = retrieve_codeblocks(args, temp_examples, bm25, retriever, name) 
-                    losses = generator.evaluate(examples, retrieved_codeblocks)
-
-                    results = {"em": "-","es": "-","id_em": "-","id_f1": "-"}
-                    if args.enable_generation:
-                        generations = generator.generate(temp_examples, retrieved_codeblocks, args.generator_max_generation_length)
-
-                        if not temp_generations:
-                            temp_generations = generations
-                        else:
-                            temp_generations = [temp_generations[i] + generations[i] for i in range(len(generations))]
-                        for i in range(len(temp_examples)):
-                            temp_examples[i].left_context = examples[i].left_context + temp_generations[i]
-                            
-                if args.enable_generation:
-                    if os.path.exists(f"{args.output_dir}/result_{epoch}/{name}") is False:
-                        os.makedirs(f"{args.output_dir}/result_{epoch}/{name}", exist_ok=True)
-                    with open(f"{args.output_dir}/result_{epoch}/{name}/prediction.jsonl", "w", encoding="utf-8") as f_pred:
-                        for example, generation in zip(examples, temp_generations):
-                            f_pred.write(json.dumps({"task_id": example.task_id, "pred": generation}) + "\n")
-
-                    if name == "cceval_python":
-                        results = compute_metric_stmt(f"{args.output_dir}/result_{epoch}/{name}", "data/cceval/python/test.jsonl", language="python", ts_lib="utils/build/python-lang-parser.so")
-                    elif name == "cceval_java":
-                        results = compute_metric_stmt(f"{args.output_dir}/result_{epoch}/{name}", "data/cceval/java/test.jsonl", language="java", ts_lib="utils/build/java-lang-parser.so")
-                    elif name == "github_eval":
-                        targets, generations = ["".join(x.target_code.split()) for x in examples], ["".join(x.split()) for x in generations]
-                        results["em"] = round(sum([1 if x[:min(len(y),len(x))] == y[:min(len(y),len(x))] else 0 for x,y in zip(generations,targets)])/len(generations)*100,4)
-                    elif name == "codereval_python":
-                        results = eval_codereval(f"{args.output_dir}/result_{epoch}/{name}", 'data/codereval/python/CEPythonRaw.jsonl', language='python', do_codereval=args.do_codereval)
-                    elif name == "codereval_java":
-                        results = eval_codereval(f"{args.output_dir}/result_{epoch}/{name}", 'data/codereval/java/CEJavaRaw.jsonl', language='java', do_codereval=args.do_codereval)
-                    elif name == "repoeval_line":
-                        results = compute_metric_stmt(f"{args.output_dir}/result_{epoch}/{name}", "data/repoeval/line_level/test.jsonl", language="python", ts_lib="utils/build/python-lang-parser.so")
-                    elif name == "repoeval_api":
-                        results = compute_metric_stmt(f"{args.output_dir}/result_{epoch}/{name}", "data/repoeval/api_level/test.jsonl", language="python", ts_lib="utils/build/python-lang-parser.so")
-
-                if 'codereval' in name:
-                    evaluate_table[name].add_row([epoch, 'raw', name, len(examples), f"{np.mean(losses):.4f}", f"{np.exp(np.mean(losses)):.4f}", results["count"], results["all"], results["self"], results["slib"], results["plib"], results["class"], results["file"], results["project"], round(time.time() - start_time, 1)])
-                else:
-                    evaluate_table[name].add_row([epoch, 'raw', name, len(examples), f"{np.mean(losses):.4f}", f"{np.exp(np.mean(losses)):.4f}", results["em"], results["es"], results["id_em"], results["id_f1"], round(time.time() - start_time, 1)])
-
-                print(evaluate_table[name])
-
-            retriever.model.module.save_pretrained(f"{args.output_dir}/retriever_cpkt/result_{epoch}")
-            retriever.tokenizer.save_pretrained(f"{args.output_dir}/retriever_cpkt/result_{epoch}")
+                print("相似代码:", retrieved_codeblocks[0][0])
+                return
             
 
 if __name__ == "__main__":
