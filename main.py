@@ -1,21 +1,15 @@
 import os
 import time
-import json
 import torch
 import random
 import argparse
 import numpy as np
 
-from generator import Generator
 from bm25 import TaskSpecificBM25
 from retriever import Retriever, tokenize
 from datasets import load_test_dataset, load_train_and_valid_dataset, construct_dataset, CodeBlock
 
-from transformers import get_linear_schedule_with_warmup
-from torch.optim import AdamW
-from torch.utils.data import DataLoader, Dataset
-from utils.eval_metric import compute_metric_stmt
-from utils.eval_codereval import eval_codereval
+from torch.utils.data import Dataset
 from prettytable import PrettyTable
 import copy
 
