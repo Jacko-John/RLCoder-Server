@@ -63,11 +63,11 @@ def retrieve_codeblocks(args, examples, bm25, retriever, dataset_name, is_traini
         queries = ["\n".join([x for x in example.left_context.split("\n") if x.strip() != ""][-context_len:]) for example in examples]
         candidate_codeblocks = bm25[dataset_name].query([x.task_id for x in examples], queries, topk=bm25_topk)
 
-        if args.enable_repocoder and inference_type == 'unixcoder_with_rl':
-            _, retrieved_codeblocks = retrieve_codeblocks(args, examples, bm25, retriever_RLCoder, dataset_name, inference_type="unixcoder") 
-            generations = generator.generate(examples, retrieved_codeblocks, args.generator_max_generation_length)
+        # if args.enable_repocoder and inference_type == 'unixcoder_with_rl':
+        #     _, retrieved_codeblocks = retrieve_codeblocks(args, examples, bm25, retriever_RLCoder, dataset_name, inference_type="unixcoder") 
+        #     generations = generator.generate(examples, retrieved_codeblocks, args.generator_max_generation_length)
 
-            queries = [query + '\n' + prediction for query, prediction in zip(queries, generations)]
+        #     queries = [query + '\n' + prediction for query, prediction in zip(queries, generations)]
 
         if inference_type == "bm25":
             return queries, candidate_codeblocks
