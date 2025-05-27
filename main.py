@@ -186,50 +186,17 @@ def run(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--generator_model_path", default="deepseek-ai/deepseek-coder-1.3b-base", type=str, help="Generator model path")
-    parser.add_argument("--generator_batch_size_per_gpu", default=32, type=int, help="Generator batch size per GPU")
-    parser.add_argument("--generator_max_crossfile_length", default=512, type=int, help="Maximum cross-file length for the generator")
-    parser.add_argument("--generator_max_context_length", default=1024, type=int, help="Maximum context length for the generator")
-    parser.add_argument("--generator_max_generation_length", default=64, type=int, help="Maximum generation length for the generator")
-    parser.add_argument("--disable_generator", action="store_true", help="Disable the generator")
-
-    parser.add_argument("--retriever_model_path", default="microsoft/unixcoder-base", type=str, help="Retriever model path")
-    parser.add_argument("--retriever_batch_size_per_gpu", default=64, type=int, help="Retriever batch size per GPU")
-    parser.add_argument("--disable_retriever", action="store_true", help="Disable the retriever")
-    parser.add_argument("--retriever_query_context_length", default=256, type=int, help="Retriever query context length")
-    parser.add_argument("--retriever_candidate_context_length", default=512, type=int, help="Retriever candidate context length")
-
-    parser.add_argument("--inference_type", default="baseline", type=str, help="Inference type")
-    parser.add_argument("--output_dir", default="results/baseline", type=str, help="Output directory")
-    parser.add_argument("--eval", action="store_true", help="Perform evaluation")
-    parser.add_argument("--enable_tqdm", action="store_true", help="Enable progress bar")
-    parser.add_argument("--enable_generation", action="store_true", help="Enable generation")
-    parser.add_argument("--debug", action="store_true", help="Debug mode, use a small dataset")
-
-    parser.add_argument("--num_workers", default=14, type=int, help="Number of CPU cores")
-    parser.add_argument("--weighted_keywords", action="store_true", help="Weight keywords when calculating loss during training")
-    parser.add_argument("--enable_fixed_block", action="store_true", help="Use fixed length blocks when building candidates")
-    parser.add_argument("--enable_sft", action="store_true", help="Train using supervised learning methods")
-    parser.add_argument("--disable_stop_block", action="store_true", help="Disable the stop block")
-
-    parser.add_argument("--enable_repocoder", action="store_true", help="Use the repocoder method during generation")
-    parser.add_argument("--rlcoder_model_path", default="microsoft/unixcoder-base", type=str, help="Stage 1 model for repocoder")
-
-    parser.add_argument("--do_codereval", action="store_true", help="Execute codereval evaluation in docker")
-    parser.add_argument("--enable_forward_generation", action="store_true", help="Use progressive generation methods during inference")
-    parser.add_argument("--forward_generation_times", default=4, type=int, help="Number of times for progressive generation")
-
-    parser.add_argument("--epoch", default=20, type=int, help="Number of training epochs")
-    parser.add_argument("--inner_epoch", default=1, type=int, help="Number of inner training epochs")
-    parser.add_argument("--batch_size", default=16, type=int, help="Batch size")
-    parser.add_argument("--sample_number", default=10, type=int, help="Number of samples")
-    parser.add_argument("--data_per_epoch", default=2000, type=int, help="Amount of data per epoch")
-    parser.add_argument("--lr", default=5e-5, type=float, help="Learning rate")
-
-
+    parser.add_argument("--config", default="./config/config.yml", type=str, help="Path to the configuration file")
+    args, remaining_argv = parser.parse_known_args()
+    
+    from config.config import load_config
+    config = load_config(args.config)
+            
+    parser.set_defaults(**config)
+    args = parser.parse_args(remaining_argv, namespace=args)
+    
     print("Number of GPUs:", torch.cuda.device_count())
 
-    args = parser.parse_args()
     args.generator_batch_size = args.generator_batch_size_per_gpu * torch.cuda.device_count()
     args.retriever_batch_size = args.retriever_batch_size_per_gpu * torch.cuda.device_count()
 

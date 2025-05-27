@@ -1,0 +1,41 @@
+generator_model_path: "deepseek-ai/deepseek-coder-1.3b-base"
+generator_batch_size_per_gpu: 32
+generator_max_crossfile_length: 512
+generator_max_context_length: 1024
+generator_max_generation_length: 64
+disable_generator: false
+
+retriever_model_path: "/home/dreaminglri/RLCoder-Server/model/RLRetriever"
+retriever_batch_size_per_gpu: 64
+disable_retriever: false
+retriever_query_context_length: 256
+retriever_candidate_context_length: 512
+
+inference_type: "unixcoder_with_rl"
+output_dir: "results/baseline"
+eval: true
+enable_tqdm: false
+enable_generation: false
+debug: false
+
+num_workers: 14
+weighted_keywords: true
+enable_fixed_block: false
+enable_sft: false
+disable_stop_block: false
+
+enable_repocoder: false
+rlcoder_model_path: "microsoft/unixcoder-base"
+
+do_codereval: false
+enable_forward_generation: false
+forward_generation_times: 4
+
+epoch: 20
+inner_epoch: 1
+batch_size: 16
+sample_number: 10
+data_per_epoch: 2000
+lr: 5e-5
+
+config: "./config.yml"
