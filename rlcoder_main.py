@@ -48,10 +48,14 @@ def retrieve_codeblocks(args, examples, bm25, retriever, dataset_name, is_traini
         inference_type = args.inference_type
     if inference_type == "baseline":
         return None, [[] for _ in range(len(examples))]
+    
+    # for item in examples:
+    #     print("Example[0]:", item)
 
     bm25_topk, unixcoder_topk, context_len = 5, 5, 20
     if inference_type in ["bm25", "unixcoder", "unixcoder_with_rl"]:
         if dataset_name not in bm25:
+            # 但是这里有可能用到dataset其它参数，需要注意
             bm25[dataset_name] = TaskSpecificBM25(examples, args)
 
         if inference_type == "unixcoder":
@@ -62,10 +66,11 @@ def retrieve_codeblocks(args, examples, bm25, retriever, dataset_name, is_traini
 
         queries = ["\n".join([x for x in example.left_context.split("\n") if x.strip() != ""][-context_len:]) for example in examples]
         candidate_codeblocks = bm25[dataset_name].query([x.task_id for x in examples], queries, topk=bm25_topk)
-
-        # if args.enable_repocoder and inference_type == 'unixcoder_with_rl':
-        #     _, retrieved_codeblocks = retrieve_codeblocks(args, examples, bm25, retriever_RLCoder, dataset_name, inference_type="unixcoder") 
-        #     generations = generator.generate(examples, retrieved_codeblocks, args.generator_max_generation_length)
+        
+        # dataset在这里只用到了left_context行，即代码上文，所以可以构建全新数据集，只包含left_context，事实证明不行（（（（
+        
+        for i in range(10 if len(queries) > 10 else len(queries)):
+            print("quary:", queries[i], "\n")
 
         #     queries = [query + '\n' + prediction for query, prediction in zip(queries, generations)]
 
@@ -164,6 +169,19 @@ def run(args):
             start_time = time.time()
             print("Evaluating on {} dataset".format(name))
             
+            import json
+            from datasets import Example, CodeBlock
+            with open('test/dataset.json', 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+        test_examples = []
+        language = 'python'
+        for item in data:
+            # 假设 item 是 dict，直接取字段
+            cross_files = item["crossfile_context"] if len(item["crossfile_context"]) > 0 else [{'path': "", "text": "Don't need cross file context for completion"}]
+            cross_files = [CodeBlock(x["path"], f"file path: {x['path']}\nlines: {0}-{len(x['text'].splitlines())}", x["text"], language, '') for x in cross_files]
+            test_examples.append(Example(item["task_id"], item["path"], item["left_context"], item["right_context"], cross_files, item["groundtruth"], language))
+            
             temp_examples = copy.deepcopy(examples)
             
             temp_examples = temp_examples[:10]
@@ -171,10 +189,16 @@ def run(args):
             
             temp_generations = []
                 
-            for _ in range(args.forward_generation_times):
-                _, retrieved_codeblocks = retrieve_codeblocks(args, temp_examples, bm25, retriever, name)
-                print("相似代码:", retrieved_codeblocks[0][0])
-                return
+        _, retrieved_codeblocks = retrieve_codeblocks(args, test_examples, bm25, retriever, name)
+        # 假设 retrieved_codeblocks 是二维列表
+        for i, codeblocks in enumerate(retrieved_codeblocks):
+            print(f"Example {i}:")
+            for j, cb in enumerate(codeblocks):
+                print(f"  CodeBlock {j}:")
+                print(f"    file_path: {cb.file_path}")
+                print(f"    code_content: {cb.code_content}")
+                print(f"    language: {cb.language}")
+                print(f"    _type: {cb._type}")
             
 
 if __name__ == "__main__":
