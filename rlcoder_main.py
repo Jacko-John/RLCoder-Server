@@ -33,7 +33,7 @@ set_random_seed()
 
 # 核心代码，输入数据集，检索内容
 # Retrieves code blocks based on different inference types.
-def retrieve_codeblocks(args, examples, bm25, retriever, dataset_name, is_training=False, inference_type=None):
+def retrieve_codeblocks(args, queries, dataset, bm25, retriever, dataset_name, is_training=False, inference_type=None):
     """
     Retrieves code blocks based on different inference types.
     :param args: An argument object containing configuration parameters.
@@ -47,7 +47,7 @@ def retrieve_codeblocks(args, examples, bm25, retriever, dataset_name, is_traini
     if inference_type is None:
         inference_type = args.inference_type
     if inference_type == "baseline":
-        return None, [[] for _ in range(len(examples))]
+        return None, [[] for _ in range(len(dataset))]
     
     # for item in examples:
     #     print("Example[0]:", item)
@@ -56,7 +56,7 @@ def retrieve_codeblocks(args, examples, bm25, retriever, dataset_name, is_traini
     if inference_type in ["bm25", "unixcoder", "unixcoder_with_rl"]:
         if dataset_name not in bm25:
             # 但是这里有可能用到dataset其它参数，需要注意
-            bm25[dataset_name] = TaskSpecificBM25(examples, args)
+            bm25[dataset_name] = TaskSpecificBM25(dataset, args)
 
         if inference_type == "unixcoder":
             bm25_topk = 50 
@@ -64,13 +64,14 @@ def retrieve_codeblocks(args, examples, bm25, retriever, dataset_name, is_traini
             bm25_topk = args.sample_number * 10 
             unixcoder_topk = args.sample_number 
 
-        queries = ["\n".join([x for x in example.left_context.split("\n") if x.strip() != ""][-context_len:]) for example in examples]
-        candidate_codeblocks = bm25[dataset_name].query([x.task_id for x in examples], queries, topk=bm25_topk)
+        queries = ["\n".join([x for x in example.left_context.split("\n") if x.strip() != ""]) for example in queries]
+        candidate_codeblocks = bm25[dataset_name].query([x.task_id for x in dataset], queries, topk=bm25_topk)
         
         # dataset在这里只用到了left_context行，即代码上文，所以可以构建全新数据集，只包含left_context，事实证明不行（（（（
         
         for i in range(10 if len(queries) > 10 else len(queries)):
-            print("quary:", queries[i], "\n")
+            print("quary:", queries[i])
+            print("="*50)
 
         #     queries = [query + '\n' + prediction for query, prediction in zip(queries, generations)]
 
@@ -85,10 +86,10 @@ def retrieve_codeblocks(args, examples, bm25, retriever, dataset_name, is_traini
                 else:
                     candidate_codeblocks = retriever.retrieve(queries, candidate_codeblocks, topk=unixcoder_topk-1)
 
-                    candidate_codeblocks = [x + [CodeBlock("", "Don't need cross file context for completion", "", y.language, '')] for x,y in zip(candidate_codeblocks, examples)]
+                    candidate_codeblocks = [x + [CodeBlock("", "Don't need cross file context for completion", "", y.language, '')] for x,y in zip(candidate_codeblocks, dataset)]
             else:
                 if not args.disable_stop_block:
-                    candidate_codeblocks = [x + [CodeBlock("", "Don't need cross file context for completion", "", y.language, '')] for x,y in zip(candidate_codeblocks, examples)]
+                    candidate_codeblocks = [x + [CodeBlock("", "Don't need cross file context for completion", "", y.language, '')] for x,y in zip(candidate_codeblocks, dataset)]
                 
                 candidate_codeblocks = retriever.retrieve(queries,  candidate_codeblocks, topk=unixcoder_topk)
         
@@ -189,11 +190,12 @@ def run(args):
             
             temp_generations = []
                 
-        _, retrieved_codeblocks = retrieve_codeblocks(args, test_examples, bm25, retriever, name)
+        _, retrieved_codeblocks = retrieve_codeblocks(args, test_examples, temp_examples, bm25, retriever, name)
         # 假设 retrieved_codeblocks 是二维列表
         for i, codeblocks in enumerate(retrieved_codeblocks):
             print(f"Example {i}:")
             for j, cb in enumerate(codeblocks):
+                print("=" * 50)
                 print(f"  CodeBlock {j}:")
                 print(f"    file_path: {cb.file_path}")
                 print(f"    code_content: {cb.code_content}")
