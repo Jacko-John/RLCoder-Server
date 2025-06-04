@@ -110,8 +110,8 @@ class CustomDataset(Dataset):
         query_tokens_id = tokenize(self.queries[idx], self.tokenizer, self.max_query_length, True)
         candidate_tokens_id = [tokenize(str(x), self.tokenizer, self.max_candidate_length, False) for x in self.candidates[idx]]
         return torch.tensor(query_tokens_id, dtype=torch.long), torch.tensor(candidate_tokens_id, dtype=torch.long), torch.tensor(self.labels[idx], dtype=torch.long)
-
-def run(args):
+    
+def load_dataset(args):
     cceval_python_examples = load_test_dataset(args, "cceval", "python")
     cceval_java_examples = load_test_dataset(args, "cceval", "java")
     # codereval_python_examples = load_test_dataset(args, "codereval", "python")
@@ -134,11 +134,7 @@ def run(args):
         # "repoeval_func": repoeval_func_examples,
     }
 
-
-    # global generator
-    # generator = Generator(args)
     retriever = Retriever(args)
-
 
     if args.enable_repocoder:
         args_RLCoder = copy.deepcopy(args)
@@ -155,65 +151,60 @@ def run(args):
 
     bm25 = {}
     
-    if args.eval:
-        table = PrettyTable()
-        table.field_names = ["Method", "Dataset", "Total Samples", "Loss", "PPL", "EM", "ES", "ID_EM", "ID_F1", "Time (sec)"]
+    table = PrettyTable()
+    table.field_names = ["Method", "Dataset", "Total Samples", "Loss", "PPL", "EM", "ES", "ID_EM", "ID_F1", "Time (sec)"]
 
-        codereval_table = PrettyTable()
-        codereval_table.field_names = ["Method", "Dataset", "Total Samples", "Loss", "PPL", "count", "all", "self", "slib", "plib", "class", "file", "project", "Time (sec)"]
-        
-        for name, examples in all_eval_examples.items():
-            start_time = time.time()
-            print("Evaluating on {} dataset".format(name))
-            
-        import json
-        with open('test/dataset.json', 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
-        queries = []
-         
-        queries.append(data["left_context"])
-        
-        dataset = copy.deepcopy(examples)
-        
-        dataset = dataset[:10]
-            
-        # 将下面做成循环即可
-        process_queries(args, dataset, bm25, retriever, name)
-                
-        # _, retrieved_codeblocks = retrieve_codeblocks(args, queries, dataset, bm25, retriever, name)
-        # 假设 retrieved_codeblocks 是二维列表
-        # for i, codeblocks in enumerate(retrieved_codeblocks):
-        #     print(f"Example {i}:")
-        #     for j, cb in enumerate(codeblocks):
-        #         print("=" * 50)
-        #         print(f"  CodeBlock {j}:")
-        #         print(f"    file_path: {cb.file_path}")
-        #         print(f"    code_content: {cb.code_content}")
-        #         print(f"    language: {cb.language}")
-        #         print(f"    _type: {cb._type}")
-        
-def process_queries(args, dataset, bm25, retriever, name):
-    while True:
-        user_input = input("请输入left_context（或输入exit退出）：")
-        if user_input.strip().lower() == "exit":
-            break
-        
-        queries = [user_input]
-
-        _, retrieved_codeblocks = retrieve_codeblocks(args, queries, dataset, bm25, retriever, name)
-        # 输出结果
-        for i, codeblocks in enumerate(retrieved_codeblocks):
-            print(f"Example {i}:")
-            for j, cb in enumerate(codeblocks):
-                print("=" * 50)
-                print(f"  CodeBlock {j}:")
-                print(f"    file_path: {cb.file_path}")
-                print(f"    code_content: {cb.code_content}")
-                print(f"    language: {cb.language}")
-                print(f"    _type: {cb._type}")
+    codereval_table = PrettyTable()
+    codereval_table.field_names = ["Method", "Dataset", "Total Samples", "Loss", "PPL", "count", "all", "self", "slib", "plib", "class", "file", "project", "Time (sec)"]
     
-def rlcoder_main():
+
+    
+    return bm25, retriever, all_eval_examples
+
+def run(args, left_content, bm25, retriever, all_eval_examples):
+    queries = [left_content]
+    
+    time_start1 = time.time()
+    
+    datasets = copy.deepcopy(all_eval_examples)
+    
+    time_end1 = time.time()
+    
+    print("Loading datasets took {:.2f} seconds".format(time_end1 - time_start1))
+    
+    result = []
+    
+    for name, dataset in datasets.items():
+        print("Evaluating on {} dataset".format(name))
+        
+        time_start2 = time.time()
+        
+        dataset = dataset  # Limit to 20 samples for testing
+
+        time_end2 = time.time()
+        print("slice dataset {} took {:.2f} seconds".format(name, time_end2 - time_start2))
+        
+        time_start3 = time.time()
+            
+        _, retrieved_codeblocks = retrieve_codeblocks(args, queries, dataset, bm25, retriever, name)
+        
+        time_end3 = time.time()
+        print("Retrieving code blocks for {} took {:.2f} seconds".format(name, time_end3 - time_start3))
+    
+        for cb in retrieved_codeblocks[0]:
+            result.append({
+                "file_path": cb.file_path,
+                "code_content": cb.code_content,
+                "language": cb.language,
+                "_type": cb._type
+            })
+        result.append({
+            "#########": "End of dataset {}".format(name)
+        })
+    return result
+        
+    
+def init_rlcoder():
     """
     Main function to run the RLCoder.
     """
@@ -230,5 +221,5 @@ def rlcoder_main():
 
     args.generator_batch_size = args.generator_batch_size_per_gpu * torch.cuda.device_count()
     args.retriever_batch_size = args.retriever_batch_size_per_gpu * torch.cuda.device_count()
-
-    run(args)
+    
+    return args
