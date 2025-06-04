@@ -170,32 +170,27 @@ def run(args):
         with open('test/dataset.json', 'r', encoding='utf-8') as f:
             data = json.load(f)
 
-        test_examples = []
-        language = 'python'
-        for item in data:
-            # 假设 item 是 dict，直接取字段
-            cross_files = item["crossfile_context"] if len(item["crossfile_context"]) > 0 else [{'path': "", "text": "Don't need cross file context for completion"}]
-            cross_files = [CodeBlock(x["path"], f"file path: {x['path']}\nlines: {0}-{len(x['text'].splitlines())}", x["text"], language, '') for x in cross_files]
-            test_examples.append(Example(item["task_id"], item["path"], item["left_context"], item["right_context"], cross_files, item["groundtruth"], language))
+        queries = []
+         
+        queries.append(data["left_context"])
+        
+        dataset = copy.deepcopy(examples)
+        
+        dataset = dataset[:10]
             
-            temp_examples = copy.deepcopy(examples)
-            
-            temp_examples = temp_examples[:10]
-
-            
-            temp_generations = []
+        # 将下面做成循环即可
                 
-        _, retrieved_codeblocks = retrieve_codeblocks(args, test_examples, temp_examples, bm25, retriever, name)
+        _, retrieved_codeblocks = retrieve_codeblocks(args, queries, dataset, bm25, retriever, name)
         # 假设 retrieved_codeblocks 是二维列表
-        for i, codeblocks in enumerate(retrieved_codeblocks):
-            print(f"Example {i}:")
-            for j, cb in enumerate(codeblocks):
-                print("=" * 50)
-                print(f"  CodeBlock {j}:")
-                print(f"    file_path: {cb.file_path}")
-                print(f"    code_content: {cb.code_content}")
-                print(f"    language: {cb.language}")
-                print(f"    _type: {cb._type}")
+        # for i, codeblocks in enumerate(retrieved_codeblocks):
+        #     print(f"Example {i}:")
+        #     for j, cb in enumerate(codeblocks):
+        #         print("=" * 50)
+        #         print(f"  CodeBlock {j}:")
+        #         print(f"    file_path: {cb.file_path}")
+        #         print(f"    code_content: {cb.code_content}")
+        #         print(f"    language: {cb.language}")
+        #         print(f"    _type: {cb._type}")
             
 
 if __name__ == "__main__":
