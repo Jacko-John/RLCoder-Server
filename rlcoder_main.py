@@ -64,14 +64,10 @@ def retrieve_codeblocks(args, queries, dataset, bm25, retriever, dataset_name, i
             bm25_topk = args.sample_number * 10 
             unixcoder_topk = args.sample_number 
 
-        queries = ["\n".join([x for x in example.left_context.split("\n") if x.strip() != ""]) for example in queries]
+        # 这里的queries是一个list，里面只包含left_content，这里直接输入left_content
+        # print("Queries:", queries)
         candidate_codeblocks = bm25[dataset_name].query([x.task_id for x in dataset], queries, topk=bm25_topk)
         
-        # dataset在这里只用到了left_context行，即代码上文，所以可以构建全新数据集，只包含left_context，事实证明不行（（（（
-        
-        for i in range(10 if len(queries) > 10 else len(queries)):
-            print("quary:", queries[i])
-            print("="*50)
 
         #     queries = [query + '\n' + prediction for query, prediction in zip(queries, generations)]
 
@@ -170,10 +166,9 @@ def run(args):
             start_time = time.time()
             print("Evaluating on {} dataset".format(name))
             
-            import json
-            from datasets import Example, CodeBlock
-            with open('test/dataset.json', 'r', encoding='utf-8') as f:
-                data = json.load(f)
+        import json
+        with open('test/dataset.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
 
         test_examples = []
         language = 'python'
