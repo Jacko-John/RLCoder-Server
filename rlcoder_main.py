@@ -179,8 +179,9 @@ def run(args):
         dataset = dataset[:10]
             
         # 将下面做成循环即可
+        process_queries(args, dataset, bm25, retriever, name)
                 
-        _, retrieved_codeblocks = retrieve_codeblocks(args, queries, dataset, bm25, retriever, name)
+        # _, retrieved_codeblocks = retrieve_codeblocks(args, queries, dataset, bm25, retriever, name)
         # 假设 retrieved_codeblocks 是二维列表
         # for i, codeblocks in enumerate(retrieved_codeblocks):
         #     print(f"Example {i}:")
@@ -191,16 +192,36 @@ def run(args):
         #         print(f"    code_content: {cb.code_content}")
         #         print(f"    language: {cb.language}")
         #         print(f"    _type: {cb._type}")
-            
+        
+def process_queries(args, dataset, bm25, retriever, name):
+    while True:
+        user_input = input("请输入left_context（或输入exit退出）：")
+        if user_input.strip().lower() == "exit":
+            break
+        
+        queries = [user_input]
 
-if __name__ == "__main__":
+        _, retrieved_codeblocks = retrieve_codeblocks(args, queries, dataset, bm25, retriever, name)
+        # 输出结果
+        for i, codeblocks in enumerate(retrieved_codeblocks):
+            print(f"Example {i}:")
+            for j, cb in enumerate(codeblocks):
+                print("=" * 50)
+                print(f"  CodeBlock {j}:")
+                print(f"    file_path: {cb.file_path}")
+                print(f"    code_content: {cb.code_content}")
+                print(f"    language: {cb.language}")
+                print(f"    _type: {cb._type}")
+    
+def rlcoder_main():
+    """
+    Main function to run the RLCoder.
+    """
     parser = argparse.ArgumentParser()
-
-    parser.add_argument("--config", default="./config/config.yml", type=str, help="Path to the configuration file")
     args, remaining_argv = parser.parse_known_args()
     
     from config.config import load_config
-    config = load_config(args.config)
+    config = load_config("./config/config.yml")
             
     parser.set_defaults(**config)
     args = parser.parse_args(remaining_argv, namespace=args)
