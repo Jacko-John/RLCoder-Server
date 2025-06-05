@@ -24,7 +24,7 @@ def retrieve_api():
     if not left_context:
         return jsonify({'error': 'left_context is required'}), 400
     
-    result =  run(arg, left_context, bm25, retriver, all_eval_examples)
+    result =  run(arg, left_context, bm25, retriver, all_eval_examples, is_bm25)
     return jsonify({'result': result})
 
 if __name__ == '__main__':
