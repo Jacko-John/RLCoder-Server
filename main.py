@@ -14,8 +14,13 @@ bm25, retriver, all_eval_examples = load_dataset(arg)
 
 @app.route('/retrieve', methods=['POST'])
 def retrieve_api():
-    data = request.get_json()
-    left_context = data.get('left_context', '')
+    if request.is_json:
+        data = request.get_json()
+        left_context = data.get('left_context', '')
+        is_bm25 = data.get('is_bm25', False)
+    else:
+        left_context = request.form.get('left_context', '')
+        is_bm25 = request.form.get('is_bm25', 'false').lower() == 'true'
     if not left_context:
         return jsonify({'error': 'left_context is required'}), 400
     
