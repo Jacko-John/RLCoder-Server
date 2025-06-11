@@ -34,8 +34,10 @@ forward_generation_times: 4
 epoch: 20
 inner_epoch: 1
 batch_size: 16
-sample_number: 10
+sample_number: 5
 data_per_epoch: 2000
 lr: 5e-5
+
+is_bm25: true
 
 config: "./config.yml"

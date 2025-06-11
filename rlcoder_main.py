@@ -61,13 +61,14 @@ def retrieve_codeblocks(args, queries, dataset, bm25, retriever, dataset_name, i
         if inference_type == "unixcoder":
             bm25_topk = 50 
         elif inference_type == "unixcoder_with_rl":
-            bm25_topk = args.sample_number * 10 
+            bm25_topk = args.sample_number * 1
             unixcoder_topk = args.sample_number 
 
         # 这里的queries是一个list，里面只包含left_content，这里直接输入left_content
         # print("Queries:", queries)
         candidate_codeblocks = bm25[dataset_name].query([x.task_id for x in dataset], queries, topk=bm25_topk)
-        
+        if args.is_bm25:
+            return None, candidate_codeblocks
 
         #     queries = [query + '\n' + prediction for query, prediction in zip(queries, generations)]
 
@@ -76,19 +77,7 @@ def retrieve_codeblocks(args, queries, dataset, bm25, retriever, dataset_name, i
         elif inference_type == "unixcoder":
             return queries, retriever.retrieve(queries, candidate_codeblocks, topk=unixcoder_topk)
         elif inference_type == "unixcoder_with_rl":
-            if is_training:
-                if args.disable_stop_block:
-                    candidate_codeblocks = retriever.retrieve(queries, candidate_codeblocks, topk=unixcoder_topk)
-                else:
-                    candidate_codeblocks = retriever.retrieve(queries, candidate_codeblocks, topk=unixcoder_topk-1)
-
-                    candidate_codeblocks = [x + [CodeBlock("", "Don't need cross file context for completion", "", y.language, '')] for x,y in zip(candidate_codeblocks, dataset)]
-            else:
-                if not args.disable_stop_block:
-                    candidate_codeblocks = [x + [CodeBlock("", "Don't need cross file context for completion", "", y.language, '')] for x,y in zip(candidate_codeblocks, dataset)]
-                
-                candidate_codeblocks = retriever.retrieve(queries,  candidate_codeblocks, topk=unixcoder_topk)
-        
+            candidate_codeblocks = retriever.retrieve(queries,  candidate_codeblocks, topk=unixcoder_topk)
             return queries, candidate_codeblocks
 
     raise ValueError("Unsupported inference type: {}".format(args.inference_type))
@@ -120,17 +109,14 @@ def load_dataset(args):
     repoeval_api_examples = load_test_dataset(args, "repoeval", "api_level")
     # repoeval_func_examples = load_test_dataset(args, "repoeval", "func_level")
 
-    training_raw_data, eval_raw_data = load_train_and_valid_dataset()
-    eval_all_examples = construct_dataset(eval_raw_data, 100 if args.debug else 1000)
-
     all_eval_examples = {
-        "github_eval": eval_all_examples,
+        # "github_eval": eval_all_examples,
         "cceval_python": cceval_python_examples,
-        "cceval_java": cceval_java_examples,
+        # "cceval_java": cceval_java_examples,
         # "codereval_python": codereval_python_examples,
         # "codereval_java": codereval_java_examples,
-        "repoeval_line": repoeval_line_examples,
-        "repoeval_api": repoeval_api_examples,
+        # "repoeval_line": repoeval_line_examples,
+        # "repoeval_api": repoeval_api_examples,
         # "repoeval_func": repoeval_func_examples,
     }
 
@@ -163,33 +149,14 @@ def load_dataset(args):
 
 def run(args, left_content, bm25, retriever, all_eval_examples):
     queries = [left_content]
-    
-    time_start1 = time.time()
-    
-    datasets = copy.deepcopy(all_eval_examples)
-    
-    time_end1 = time.time()
-    
-    print("Loading datasets took {:.2f} seconds".format(time_end1 - time_start1))
-    
     result = []
     
-    for name, dataset in datasets.items():
+    for name, dataset in all_eval_examples.items():
         print("Evaluating on {} dataset".format(name))
         
-        time_start2 = time.time()
+        # dataset = dataset  # Limit to 20 samples for testing
         
-        dataset = dataset  # Limit to 20 samples for testing
-
-        time_end2 = time.time()
-        print("slice dataset {} took {:.2f} seconds".format(name, time_end2 - time_start2))
-        
-        time_start3 = time.time()
-            
         _, retrieved_codeblocks = retrieve_codeblocks(args, queries, dataset, bm25, retriever, name)
-        
-        time_end3 = time.time()
-        print("Retrieving code blocks for {} took {:.2f} seconds".format(name, time_end3 - time_start3))
     
         for cb in retrieved_codeblocks[0]:
             result.append({
@@ -198,9 +165,6 @@ def run(args, left_content, bm25, retriever, all_eval_examples):
                 "language": cb.language,
                 "_type": cb._type
             })
-        result.append({
-            "#########": "End of dataset {}".format(name)
-        })
     return result
         
     
