@@ -33,7 +33,7 @@ set_random_seed()
 
 # 核心代码，输入数据集，检索内容
 # Retrieves code blocks based on different inference types.
-def retrieve_codeblocks(args, queries, dataset, bm25, retriever, dataset_name, is_training=False, inference_type=None, is_bm25=False):
+def retrieve_codeblocks(args, queries, dataset, bm25, retriever, dataset_name, is_training=False, inference_type=None):
     """
     Retrieves code blocks based on different inference types.
     :param args: An argument object containing configuration parameters.
@@ -67,7 +67,7 @@ def retrieve_codeblocks(args, queries, dataset, bm25, retriever, dataset_name, i
         # 这里的queries是一个list，里面只包含left_content，这里直接输入left_content
         # print("Queries:", queries)
         candidate_codeblocks = bm25[dataset_name].query([x.task_id for x in dataset], queries, topk=bm25_topk)
-        if is_bm25:
+        if args.is_bm25:
             return None, candidate_codeblocks
 
         #     queries = [query + '\n' + prediction for query, prediction in zip(queries, generations)]
@@ -147,7 +147,7 @@ def load_dataset(args):
     
     return bm25, retriever, all_eval_examples
 
-def run(args, left_content, bm25, retriever, all_eval_examples, is_bm25):
+def run(args, left_content, bm25, retriever, all_eval_examples):
     queries = [left_content]
     result = []
     
@@ -156,7 +156,7 @@ def run(args, left_content, bm25, retriever, all_eval_examples, is_bm25):
         
         # dataset = dataset  # Limit to 20 samples for testing
         
-        _, retrieved_codeblocks = retrieve_codeblocks(args, queries, dataset, bm25, retriever, name, is_bm25=is_bm25)
+        _, retrieved_codeblocks = retrieve_codeblocks(args, queries, dataset, bm25, retriever, name)
     
         for cb in retrieved_codeblocks[0]:
             result.append({
@@ -165,9 +165,6 @@ def run(args, left_content, bm25, retriever, all_eval_examples, is_bm25):
                 "language": cb.language,
                 "_type": cb._type
             })
-        result.append({
-            "#########": "End of dataset {}".format(name)
-        })
     return result
         
     

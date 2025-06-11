@@ -38,4 +38,6 @@ sample_number: 5
 data_per_epoch: 2000
 lr: 5e-5
 
+is_bm25: true
+
 config: "./config.yml"

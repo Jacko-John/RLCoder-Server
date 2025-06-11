@@ -17,14 +17,18 @@ def retrieve_api():
     if request.is_json:
         data = request.get_json()
         left_context = data.get('left_context', '')
-        is_bm25 = data.get('is_bm25', False)
     else:
         left_context = request.form.get('left_context', '')
-        is_bm25 = request.form.get('is_bm25', 'false').lower() == 'true'
     if not left_context:
         return jsonify({'error': 'left_context is required'}), 400
     
-    result =  run(arg, left_context, bm25, retriver, all_eval_examples, is_bm25)
+    result = run(arg, left_context, bm25, retriver, all_eval_examples)
+    if isinstance(result, list):
+        result = [
+            {k: v for k, v in item.items() if k != "_type"}
+            for item in result
+            if isinstance(item, dict)
+        ]
     return jsonify({'result': result})
 
 if __name__ == '__main__':
